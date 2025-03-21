@@ -1,6 +1,3 @@
-Below is a sample README.md in English that you can include in your GitHub repository. It provides an overview, usage instructions, and the AppleScript code snippet for creating an APFS RAMDisk of 10% of your physical RAM. You can modify the text as needed.
-
-```markdown
 # AppleScript RAMDisk
 
 This repository contains an AppleScript that creates an APFS-formatted RAMDisk on macOS. The RAMDisk automatically allocates **10% of your physical RAM** and sets up three directories (`TEMP`, `Downloads`, and `Screenshot`) inside it. This can be useful for speeding up temporary file access or keeping certain data off persistent storage.
