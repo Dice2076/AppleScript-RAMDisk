@@ -1,69 +1,46 @@
 # AppleScript RAMDisk
 
-This repository contains an AppleScript that creates an APFS-formatted RAMDisk on macOS. The RAMDisk automatically allocates **10% of your physical RAM** and sets up three directories (`TEMP`, `Downloads`, and `Screenshot`) inside it. This can be useful for speeding up temporary file access or keeping certain data off persistent storage.
+An AppleScript that creates an APFS-formatted RAMDisk on macOS. It allocates **10% of your physical RAM**, creates three folders (`TEMP`, `Downloads`, `Screenshot`) inside it, and sends macOS screenshots to `RAMDisk/Screenshot`. It can be packaged as an app that runs automatically at every login.
 
-## Overview
+> Traditional Chinese step-by-step guide: see [`使用說明.txt`](使用說明.txt).
 
-1. **Retrieve physical RAM size**  
-   Uses `sysctl -n hw.memsize` to get the total RAM (in bytes).
+## Files
 
-2. **Calculate the 10% size**  
-   Divides the retrieved RAM size by 10, then converts the result into units of 512-byte blocks (required by the `ram://` scheme).
+| File | Purpose |
+| --- | --- |
+| `RAMDisk.applescript` | The main script. |
+| `1_一鍵打包並設定開機自動執行.command` | Compiles the script into `RAMDisk.app`, signs it locally, and adds it to Login Items. |
+| `2_還原截圖位置與移除開機執行.command` | Restores your previous screenshot location and removes the Login Item. |
+| `使用說明.txt` | Step-by-step guide (Traditional Chinese). |
 
-3. **Create the RAMDisk**  
-   Uses `hdiutil attach -nomount ram://<block_count>` to generate an unmounted disk device.
+## What the script does
 
-4. **Format as APFS**  
-   Runs `diskutil eraseVolume APFS RAMDisk <device_name>` to format the device as APFS.
+1. **Skips if already created.** If `/Volumes/RAMDisk` exists, it shows a notification and stops, so memory is not allocated twice.
+2. **Calculates the size.** Reads `sysctl -n hw.memsize`, takes 10% (`ramPercent`), and converts it to 512-byte blocks using shell integer math.
+3. **Creates the RAM device.** `hdiutil attach -nomount ram://<blocks>`; only the device path (e.g. `/dev/disk4`) is kept.
+4. **Formats it as APFS.** `diskutil eraseVolume APFS RAMDisk <device>`.
+5. **Creates folders.** `mkdir -p` for `TEMP`, `Downloads`, `Screenshot`.
+6. **Backs up the screenshot location (first run only).** Your previous setting is saved to `~/.ramdisk_screenshot_backup`.
+7. **Redirects screenshots.** `defaults write com.apple.screencapture location /Volumes/RAMDisk/Screenshot`.
+8. **Cleans up on failure.** If formatting or folder creation fails, the RAM device is detached so memory is not left allocated, and an error dialog is shown.
 
-5. **Create directories**  
-   Makes three directories inside `/Volumes/RAMDisk`: `TEMP`, `Downloads`, and `Screenshot`.
+## Quick start
 
-## AppleScript Code
+1. Download or clone this repository.
+2. Right-click `1_一鍵打包並設定開機自動執行.command` → **Open** → **Open** (needed the first time because the file is not notarized).
+3. If macOS asks whether Terminal may control System Events, click **OK**.
+4. `RAMDisk` appears in the Finder sidebar with the three folders. It is recreated automatically at each login.
 
-```applescript
--- Get total physical RAM size in bytes
-set memSize to do shell script "sysctl -n hw.memsize"
+Manual alternative: open `RAMDisk.applescript` in Script Editor, then **File → Export… → Application**.
 
--- Calculate 10% of total RAM, convert to 512-byte blocks (for ram://)
-set ramDiskBlockCount to (memSize / 10) / 512
-set ramDiskBlockCount to round (ramDiskBlockCount)
+## Uninstall / restore
 
--- Create the RAMDisk device (e.g., /dev/disk4)
-set deviceInfo to do shell script ("hdiutil attach -nomount ram://" & ramDiskBlockCount)
-set deviceName to paragraph 1 of deviceInfo
+Run `2_還原截圖位置與移除開機執行.command` (right-click → Open). It restores your previous screenshot location and removes the Login Item. To free the memory right away, eject `RAMDisk` in Finder (or restart). Move anything you want to keep out of it first.
 
--- Format the RAMDisk as APFS and name it "RAMDisk"
-do shell script "diskutil eraseVolume APFS RAMDisk " & deviceName
+## Important notes
 
--- Create required directories
-do shell script "mkdir /Volumes/RAMDisk/TEMP"
-do shell script "mkdir /Volumes/RAMDisk/Downloads"
-do shell script "mkdir /Volumes/RAMDisk/Screenshot"
-```
-
-## Usage Instructions
-
-1. **Clone this Repository**  
-   Clone or download this repository to have the `.applescript` file on your machine.
-
-2. **Open in Script Editor**  
-   - Open the Script Editor (or AppleScript Editor) on your Mac.
-   - Copy and paste the script code into a new AppleScript document (or open the included `.applescript` file directly).
-
-3. **Run the Script**  
-   - Click the "Play" (Run) button in Script Editor to execute.
-   - A new volume named `RAMDisk` will appear in Finder under "Locations."
-   - Inside the volume, you should see the directories: `TEMP`, `Downloads`, and `Screenshot`.
-
-4. **(Optional) Export as an App**  
-   - In Script Editor, go to `File > Export...`.
-   - Choose "Application" in the "File Format" dropdown.
-   - Save the generated `.app` file wherever convenient. Launching it will immediately create the RAMDisk and folders.
-
-## Important Notes
-
-- **Volatile Storage**: A RAMDisk is temporary—its contents are lost when you unmount it or shut down/restart your Mac.
-- **Adjustable Size**: You can edit the script to use a different percentage of RAM by changing the calculation.  
-- **Folder Structure**: Feel free to add or remove folders by editing the script’s `mkdir` commands.
-- **Compatibility**: Tested on modern macOS versions supporting APFS. Older systems might need to adjust formatting commands accordingly.
+- **Volatile storage.** Everything in the RAMDisk is lost when you eject it, shut down, or restart. Screenshots are saved there too, so move important ones elsewhere.
+- **Memory use.** The RAMDisk reserves 10% of physical RAM (about 1.6 GB on a 16 GB Mac). Change `ramPercent` at the top of the script to adjust.
+- **`TEMP` and `Downloads` are only created.** Only screenshots are redirected automatically; point your browser or apps at these folders yourself if you want to use them.
+- **If the RAMDisk was not created** (for example right after a restart), the screenshot location may point to a folder that does not exist. Launch `RAMDisk.app` again, or run the restore script.
+- **Compatibility.** Requires macOS with APFS. The helper scripts use `zsh`, `osacompile`, `codesign`, and `osascript`, which ship with macOS.
